@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,7 +46,6 @@ import java.util.stream.Stream;
 
 import javax.inject.Provider;
 
-import org.springframework.beans.BeanUtils;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.TypeConverter;
 import org.springframework.beans.factory.BeanCreationException;
@@ -68,7 +67,6 @@ import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.beans.factory.config.AutowireCapableBeanFactory;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.beans.factory.config.BeanDefinitionHolder;
-import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.beans.factory.config.ConfigurableBeanFactory;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.beans.factory.config.DependencyDescriptor;
@@ -157,13 +155,16 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 	private Comparator<Object> dependencyComparator;
 
 	/** Resolver to use for checking if a bean definition is an autowire candidate. */
-	private AutowireCandidateResolver autowireCandidateResolver = new SimpleAutowireCandidateResolver();
+	private AutowireCandidateResolver autowireCandidateResolver = SimpleAutowireCandidateResolver.INSTANCE;
 
 	/** Map from dependency type to corresponding autowired value. */
 	private final Map<Class<?>, Object> resolvableDependencies = new ConcurrentHashMap<>(16);
 
 	/** Map of bean definition objects, keyed by bean name. */
 	private final Map<String, BeanDefinition> beanDefinitionMap = new ConcurrentHashMap<>(256);
+
+	/** Map from bean name to merged BeanDefinitionHolder. */
+	private final Map<String, BeanDefinitionHolder> mergedBeanDefinitionHolders = new ConcurrentHashMap<>(256);
 
 	/** Map of singleton and non-singleton bean names, keyed by dependency type. */
 	private final Map<Class<?>, String[]> allBeanNamesByType = new ConcurrentHashMap<>(64);
@@ -325,8 +326,7 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 			this.allowEagerClassLoading = otherListableFactory.allowEagerClassLoading;
 			this.dependencyComparator = otherListableFactory.dependencyComparator;
 			// A clone of the AutowireCandidateResolver since it is potentially BeanFactoryAware...
-			setAutowireCandidateResolver(
-					BeanUtils.instantiateClass(otherListableFactory.getAutowireCandidateResolver().getClass()));
+			setAutowireCandidateResolver(otherListableFactory.getAutowireCandidateResolver().cloneIfNecessary());
 			// Make resolvable dependencies (e.g. ResourceLoader) available here as well...
 			this.resolvableDependencies.putAll(otherListableFactory.resolvableDependencies);
 		}
@@ -382,12 +382,48 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 			@Override
 			@Nullable
 			public T getIfAvailable() throws BeansException {
-				return resolveBean(requiredType, null, false);
+				try {
+					return resolveBean(requiredType, null, false);
+				}
+				catch (ScopeNotActiveException ex) {
+					// Ignore resolved bean in non-active scope
+					return null;
+				}
+			}
+			@Override
+			public void ifAvailable(Consumer<T> dependencyConsumer) throws BeansException {
+				T dependency = getIfAvailable();
+				if (dependency != null) {
+					try {
+						dependencyConsumer.accept(dependency);
+					}
+					catch (ScopeNotActiveException ex) {
+						// Ignore resolved bean in non-active scope, even on scoped proxy invocation
+					}
+				}
 			}
 			@Override
 			@Nullable
 			public T getIfUnique() throws BeansException {
-				return resolveBean(requiredType, null, true);
+				try {
+					return resolveBean(requiredType, null, true);
+				}
+				catch (ScopeNotActiveException ex) {
+					// Ignore resolved bean in non-active scope
+					return null;
+				}
+			}
+			@Override
+			public void ifUnique(Consumer<T> dependencyConsumer) throws BeansException {
+				T dependency = getIfUnique();
+				if (dependency != null) {
+					try {
+						dependencyConsumer.accept(dependency);
+					}
+					catch (ScopeNotActiveException ex) {
+						// Ignore resolved bean in non-active scope, even on scoped proxy invocation
+					}
+				}
 			}
 			@Override
 			public Stream<T> stream() {
@@ -398,6 +434,9 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 			@Override
 			public Stream<T> orderedStream() {
 				String[] beanNames = getBeanNamesForTypedStream(requiredType);
+				if (beanNames.length == 0) {
+					return Stream.empty();
+				}
 				Map<String, T> matchingBeans = new LinkedHashMap<>(beanNames.length);
 				for (String beanName : beanNames) {
 					Object beanInstance = getBean(beanName);
@@ -791,8 +830,11 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 		if (mbd.isFactoryMethodUnique && mbd.factoryMethodToIntrospect == null) {
 			new ConstructorResolver(this).resolveFactoryMethodIfPossible(mbd);
 		}
-		return resolver.isAutowireCandidate(
-				new BeanDefinitionHolder(mbd, beanName, getAliases(beanDefinitionName)), descriptor);
+		BeanDefinitionHolder holder = (beanName.equals(beanDefinitionName) ?
+				this.mergedBeanDefinitionHolders.computeIfAbsent(beanName,
+						key -> new BeanDefinitionHolder(mbd, beanName, getAliases(beanDefinitionName))) :
+				new BeanDefinitionHolder(mbd, beanName, getAliases(beanDefinitionName)));
+		return resolver.isAutowireCandidate(holder, descriptor);
 	}
 
 	@Override
@@ -816,8 +858,15 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 	}
 
 	@Override
+	protected void clearMergedBeanDefinition(String beanName) {
+		super.clearMergedBeanDefinition(beanName);
+		this.mergedBeanDefinitionHolders.remove(beanName);
+	}
+
+	@Override
 	public void clearMetadataCache() {
 		super.clearMetadataCache();
+		this.mergedBeanDefinitionHolders.clear();
 		clearByTypeCache();
 	}
 
@@ -974,6 +1023,9 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 		if (existingDefinition != null || containsSingleton(beanName)) {
 			resetBeanDefinition(beanName);
 		}
+		else if (isConfigurationFrozen()) {
+			clearByTypeCache();
+		}
 	}
 
 	@Override
@@ -1026,10 +1078,8 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 		destroySingleton(beanName);
 
 		// Notify all post-processors that the specified bean definition has been reset.
-		for (BeanPostProcessor processor : getBeanPostProcessors()) {
-			if (processor instanceof MergedBeanDefinitionPostProcessor) {
-				((MergedBeanDefinitionPostProcessor) processor).resetBeanDefinition(beanName);
-			}
+		for (MergedBeanDefinitionPostProcessor processor : getBeanPostProcessorCache().mergedDefinition) {
+			processor.resetBeanDefinition(beanName);
 		}
 
 		// Reset all bean definitions that have the given bean as parent (recursively).
@@ -1366,9 +1416,11 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 			TypeConverter converter = (typeConverter != null ? typeConverter : getTypeConverter());
 			Object result = converter.convertIfNecessary(matchingBeans.values(), type);
 			if (result instanceof List) {
-				Comparator<Object> comparator = adaptDependencyComparator(matchingBeans);
-				if (comparator != null) {
-					((List<?>) result).sort(comparator);
+				if (((List<?>) result).size() > 1) {
+					Comparator<Object> comparator = adaptDependencyComparator(matchingBeans);
+					if (comparator != null) {
+						((List<?>) result).sort(comparator);
+					}
 				}
 			}
 			return result;
@@ -1907,17 +1959,36 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 		@Override
 		@Nullable
 		public Object getIfAvailable() throws BeansException {
-			if (this.optional) {
-				return createOptionalDependency(this.descriptor, this.beanName);
+			try {
+				if (this.optional) {
+					return createOptionalDependency(this.descriptor, this.beanName);
+				}
+				else {
+					DependencyDescriptor descriptorToUse = new DependencyDescriptor(this.descriptor) {
+						@Override
+						public boolean isRequired() {
+							return false;
+						}
+					};
+					return doResolveDependency(descriptorToUse, this.beanName, null, null);
+				}
 			}
-			else {
-				DependencyDescriptor descriptorToUse = new DependencyDescriptor(this.descriptor) {
-					@Override
-					public boolean isRequired() {
-						return false;
-					}
-				};
-				return doResolveDependency(descriptorToUse, this.beanName, null, null);
+			catch (ScopeNotActiveException ex) {
+				// Ignore resolved bean in non-active scope
+				return null;
+			}
+		}
+
+		@Override
+		public void ifAvailable(Consumer<Object> dependencyConsumer) throws BeansException {
+			Object dependency = getIfAvailable();
+			if (dependency != null) {
+				try {
+					dependencyConsumer.accept(dependency);
+				}
+				catch (ScopeNotActiveException ex) {
+					// Ignore resolved bean in non-active scope, even on scoped proxy invocation
+				}
 			}
 		}
 
@@ -1935,11 +2006,30 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 					return null;
 				}
 			};
-			if (this.optional) {
-				return createOptionalDependency(descriptorToUse, this.beanName);
+			try {
+				if (this.optional) {
+					return createOptionalDependency(descriptorToUse, this.beanName);
+				}
+				else {
+					return doResolveDependency(descriptorToUse, this.beanName, null, null);
+				}
 			}
-			else {
-				return doResolveDependency(descriptorToUse, this.beanName, null, null);
+			catch (ScopeNotActiveException ex) {
+				// Ignore resolved bean in non-active scope
+				return null;
+			}
+		}
+
+		@Override
+		public void ifUnique(Consumer<Object> dependencyConsumer) throws BeansException {
+			Object dependency = getIfUnique();
+			if (dependency != null) {
+				try {
+					dependencyConsumer.accept(dependency);
+				}
+				catch (ScopeNotActiveException ex) {
+					// Ignore resolved bean in non-active scope, even on scoped proxy invocation
+				}
 			}
 		}
 

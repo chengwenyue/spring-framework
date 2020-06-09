@@ -32,16 +32,16 @@ import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
 import org.springframework.core.ResolvableType;
-import org.springframework.core.codec.AbstractEncoderTests;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.DataBufferUtils;
+import org.springframework.core.testfixture.codec.AbstractEncoderTests;
 import org.springframework.http.MediaType;
-import org.springframework.http.codec.Pojo;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.http.codec.json.JacksonViewBean.MyJacksonView1;
 import org.springframework.http.codec.json.JacksonViewBean.MyJacksonView3;
 import org.springframework.util.MimeType;
 import org.springframework.util.MimeTypeUtils;
+import org.springframework.web.testfixture.xml.Pojo;
 
 import static java.util.Collections.singletonMap;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -69,11 +69,18 @@ public class Jackson2JsonEncoderTests extends AbstractEncoderTests<Jackson2JsonE
 		assertThat(this.encoder.canEncode(pojoType, APPLICATION_STREAM_JSON)).isTrue();
 		assertThat(this.encoder.canEncode(pojoType, null)).isTrue();
 
+		assertThat(this.encoder.canEncode(ResolvableType.forClass(Pojo.class),
+				new MediaType("application", "json", StandardCharsets.UTF_8))).isTrue();
+		assertThat(this.encoder.canEncode(ResolvableType.forClass(Pojo.class),
+				new MediaType("application", "json", StandardCharsets.ISO_8859_1))).isFalse();
+
 		// SPR-15464
 		assertThat(this.encoder.canEncode(ResolvableType.NONE, null)).isTrue();
 
 		// SPR-15910
 		assertThat(this.encoder.canEncode(ResolvableType.forClass(Object.class), APPLICATION_OCTET_STREAM)).isFalse();
+
+
 	}
 
 	@Override

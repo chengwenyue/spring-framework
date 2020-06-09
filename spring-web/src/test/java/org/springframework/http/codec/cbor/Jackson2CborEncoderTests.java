@@ -18,6 +18,7 @@ package org.springframework.http.codec.cbor;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.util.function.Consumer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -25,13 +26,14 @@ import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Flux;
 
 import org.springframework.core.ResolvableType;
-import org.springframework.core.io.buffer.AbstractLeakCheckingTests;
 import org.springframework.core.io.buffer.DataBuffer;
-import org.springframework.core.io.buffer.support.DataBufferTestUtils;
-import org.springframework.http.codec.Pojo;
+import org.springframework.core.testfixture.io.buffer.AbstractLeakCheckingTests;
+import org.springframework.core.testfixture.io.buffer.DataBufferTestUtils;
+import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
 import org.springframework.util.MimeType;
+import org.springframework.web.testfixture.xml.Pojo;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
@@ -73,6 +75,12 @@ public class Jackson2CborEncoderTests extends AbstractLeakCheckingTests {
 
 		// SPR-15464
 		assertThat(this.encoder.canEncode(ResolvableType.NONE, null)).isTrue();
+
+
+		assertThat(this.encoder.canEncode(ResolvableType.forClass(Pojo.class),
+				new MediaType("application", "cbor", StandardCharsets.UTF_8))).isTrue();
+		assertThat(this.encoder.canEncode(ResolvableType.forClass(Pojo.class),
+				new MediaType("application", "cbor", StandardCharsets.ISO_8859_1))).isFalse();
 	}
 
 	@Test

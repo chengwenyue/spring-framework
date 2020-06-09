@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -213,7 +213,6 @@ class ConstructorResolver {
 
 			// 9 循环所有的候选的构造器
 			for (Constructor<?> candidate : candidates) {
-
 				int parameterCount = candidate.getParameterCount();
 				// 如果找到一个构造器，并且参数比当前构造器多，说明已经找到一个合适的构造器了
 				if (constructorToUse != null && argsToUse != null && argsToUse.length > parameterCount) {
@@ -551,8 +550,8 @@ class ConstructorResolver {
 			LinkedList<UnsatisfiedDependencyException> causes = null;
 
 			for (Method candidate : candidates) {
-
 				int parameterCount = candidate.getParameterCount();
+
 				if (parameterCount >= minNrOfArgs) {
 					ArgumentsHolder argsHolder;
 
@@ -715,7 +714,7 @@ class ConstructorResolver {
 				throw new BeanCreationException(mbd.getResourceDescription(), beanName,
 						"Invalid constructor argument index: " + index);
 			}
-			if (index > minNrOfArgs) {
+			if (index + 1 > minNrOfArgs) {
 				minNrOfArgs = index + 1;
 			}
 			ConstructorArgumentValues.ValueHolder valueHolder = entry.getValue();

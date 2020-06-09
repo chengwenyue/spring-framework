@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,7 +38,6 @@ import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.core.io.buffer.DataBufferWrapper;
 import org.springframework.core.io.buffer.PooledDataBuffer;
 import org.springframework.http.HttpCookie;
-import org.springframework.http.HttpHeaders;
 import org.springframework.lang.Nullable;
 import org.springframework.util.Assert;
 import org.springframework.util.LinkedMultiValueMap;
@@ -63,7 +62,7 @@ class UndertowServerHttpRequest extends AbstractServerHttpRequest {
 	public UndertowServerHttpRequest(HttpServerExchange exchange, DataBufferFactory bufferFactory)
 			throws URISyntaxException {
 
-		super(initUri(exchange), "", initHeaders(exchange));
+		super(initUri(exchange), "", new UndertowHeadersAdapter(exchange.getRequestHeaders()));
 		this.exchange = exchange;
 		this.body = new RequestBodyPublisher(exchange, bufferFactory);
 		this.body.registerListeners(exchange);
@@ -75,10 +74,6 @@ class UndertowServerHttpRequest extends AbstractServerHttpRequest {
 		String query = exchange.getQueryString();
 		String requestUriAndQuery = (StringUtils.hasLength(query) ? requestURL + "?" + query : requestURL);
 		return new URI(requestUriAndQuery);
-	}
-
-	private static HttpHeaders initHeaders(HttpServerExchange exchange) {
-		return new HttpHeaders(new UndertowHeadersAdapter(exchange.getRequestHeaders()));
 	}
 
 	@Override
@@ -98,6 +93,13 @@ class UndertowServerHttpRequest extends AbstractServerHttpRequest {
 	}
 
 	@Override
+	@Nullable
+	public InetSocketAddress getLocalAddress() {
+		return this.exchange.getDestinationAddress();
+	}
+
+	@Override
+	@Nullable
 	public InetSocketAddress getRemoteAddress() {
 		return this.exchange.getSourceAddress();
 	}

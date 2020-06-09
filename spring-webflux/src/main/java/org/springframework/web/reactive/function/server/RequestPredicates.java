@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,6 +52,7 @@ import org.springframework.lang.NonNull;
 import org.springframework.lang.Nullable;
 import org.springframework.util.Assert;
 import org.springframework.util.MultiValueMap;
+import org.springframework.web.cors.reactive.CorsUtils;
 import org.springframework.web.reactive.function.BodyExtractor;
 import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.WebSession;
@@ -70,9 +71,6 @@ import org.springframework.web.util.pattern.PathPatternParser;
 public abstract class RequestPredicates {
 
 	private static final Log logger = LogFactory.getLog(RequestPredicates.class);
-
-	private static final PathPatternParser DEFAULT_PATTERN_PARSER = new PathPatternParser();
-
 
 	/**
 	 * Return a {@code RequestPredicate} that always matches.
@@ -114,7 +112,7 @@ public abstract class RequestPredicates {
 		if (!pattern.isEmpty() && !pattern.startsWith("/")) {
 			pattern = "/" + pattern;
 		}
-		return pathPredicates(DEFAULT_PATTERN_PARSER).apply(pattern);
+		return pathPredicates(PathPatternParser.defaultInstance).apply(pattern);
 	}
 
 	/**
@@ -280,7 +278,7 @@ public abstract class RequestPredicates {
 	 * Return a {@code RequestPredicate} that tests the request's query parameter of the given name
 	 * against the given predicate.
 	 * @param name the name of the query parameter to test against
-	 * @param predicate predicate to test against the query parameter value
+	 * @param predicate the predicate to test against the query parameter value
 	 * @return a predicate that matches the given predicate against the query parameter of the given name
 	 * @see ServerRequest#queryParam(String)
 	 */
@@ -449,10 +447,24 @@ public abstract class RequestPredicates {
 
 		@Override
 		public boolean test(ServerRequest request) {
-			boolean match = this.httpMethods.contains(request.method());
-			traceMatch("Method", this.httpMethods, request.method(), match);
+			HttpMethod method = method(request);
+			boolean match = this.httpMethods.contains(method);
+			traceMatch("Method", this.httpMethods, method, match);
 			return match;
 		}
+
+		@Nullable
+		private static HttpMethod method(ServerRequest request) {
+			if (CorsUtils.isPreFlightRequest(request.exchange().getRequest())) {
+				String accessControlRequestMethod =
+						request.headers().firstHeader(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD);
+				return HttpMethod.resolve(accessControlRequestMethod);
+			}
+			else {
+				return request.method();
+			}
+		}
+
 
 		@Override
 		public void accept(Visitor visitor) {
@@ -535,7 +547,12 @@ public abstract class RequestPredicates {
 
 		@Override
 		public boolean test(ServerRequest request) {
-			return this.headersPredicate.test(request.headers());
+			if (CorsUtils.isPreFlightRequest(request.exchange().getRequest())) {
+				return true;
+			}
+			else {
+				return this.headersPredicate.test(request.headers());
+			}
 		}
 
 		@Override
@@ -945,6 +962,11 @@ public abstract class RequestPredicates {
 		@Override
 		public Optional<InetSocketAddress> remoteAddress() {
 			return this.request.remoteAddress();
+		}
+
+		@Override
+		public Optional<InetSocketAddress> localAddress() {
+			return this.request.localAddress();
 		}
 
 		@Override

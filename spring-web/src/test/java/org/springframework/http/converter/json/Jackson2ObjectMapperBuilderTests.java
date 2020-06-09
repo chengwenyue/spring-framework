@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,6 +43,7 @@ import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.Version;
+import com.fasterxml.jackson.databind.AnnotationIntrospector;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonDeserializer;
@@ -60,6 +61,8 @@ import com.fasterxml.jackson.databind.cfg.SerializerFactoryConfig;
 import com.fasterxml.jackson.databind.deser.BasicDeserializerFactory;
 import com.fasterxml.jackson.databind.deser.Deserializers;
 import com.fasterxml.jackson.databind.deser.std.DateDeserializers;
+import com.fasterxml.jackson.databind.introspect.AnnotationIntrospectorPair;
+import com.fasterxml.jackson.databind.introspect.JacksonAnnotationIntrospector;
 import com.fasterxml.jackson.databind.introspect.NopAnnotationIntrospector;
 import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.fasterxml.jackson.databind.module.SimpleSerializers;
@@ -285,7 +288,7 @@ public class Jackson2ObjectMapperBuilderTests {
 				.build();
 		DateTime dateTime = new DateTime(1322903730000L, DateTimeZone.UTC);
 		assertThat(new String(objectMapper.writeValueAsBytes(dateTime), "UTF-8")).isEqualTo("1322903730000");
-		assertThat(new String(objectMapper.writeValueAsBytes(new Integer(4)), "UTF-8")).contains("customid");
+		assertThat(new String(objectMapper.writeValueAsBytes(4), "UTF-8")).contains("customid");
 	}
 
 	@Test  // SPR-12634
@@ -298,7 +301,7 @@ public class Jackson2ObjectMapperBuilderTests {
 				.build();
 		DateTime dateTime = new DateTime(1322903730000L, DateTimeZone.UTC);
 		assertThat(new String(objectMapper.writeValueAsBytes(dateTime), "UTF-8")).isEqualTo("1322903730000");
-		assertThat(new String(objectMapper.writeValueAsBytes(new Integer(4)), "UTF-8")).contains("customid");
+		assertThat(new String(objectMapper.writeValueAsBytes(4), "UTF-8")).contains("customid");
 	}
 
 	@Test  // SPR-12634
@@ -309,7 +312,7 @@ public class Jackson2ObjectMapperBuilderTests {
 				.serializerByType(Integer.class, new CustomIntegerSerializer()).build();
 		DateTime dateTime = new DateTime(1322903730000L, DateTimeZone.UTC);
 		assertThat(new String(objectMapper.writeValueAsBytes(dateTime), "UTF-8")).isEqualTo("1322903730000");
-		assertThat(new String(objectMapper.writeValueAsBytes(new Integer(4)), "UTF-8")).contains("customid");
+		assertThat(new String(objectMapper.writeValueAsBytes(4), "UTF-8")).contains("customid");
 	}
 
 	@Test  // gh-22576
@@ -429,9 +432,23 @@ public class Jackson2ObjectMapperBuilderTests {
 		assertThat(output).doesNotContain("value2");
 	}
 
+	@Test // gh-23017
+	public void postConfigurer() {
+
+		JacksonAnnotationIntrospector introspector1 = new JacksonAnnotationIntrospector();
+		JacksonAnnotationIntrospector introspector2 = new JacksonAnnotationIntrospector();
+
+		ObjectMapper mapper = Jackson2ObjectMapperBuilder.json()
+				.postConfigurer(m -> m.setAnnotationIntrospectors(introspector1, introspector2))
+				.build();
+
+		assertThat(mapper.getSerializationConfig().getAnnotationIntrospector()).isSameAs(introspector1);
+		assertThat(mapper.getDeserializationConfig().getAnnotationIntrospector()).isSameAs(introspector2);
+	}
+
 	@Test
 	public void completeSetup() throws JsonMappingException {
-		NopAnnotationIntrospector annotationIntrospector = NopAnnotationIntrospector.instance;
+		NopAnnotationIntrospector introspector = NopAnnotationIntrospector.instance;
 
 		Map<Class<?>, JsonDeserializer<?>> deserializerMap = new HashMap<>();
 		JsonDeserializer<Date> deserializer = new DateDeserializers.DateDeserializer();
@@ -445,7 +462,8 @@ public class Jackson2ObjectMapperBuilderTests {
 				.serializers(serializer1)
 				.serializersByType(Collections.singletonMap(Boolean.class, serializer2))
 				.deserializersByType(deserializerMap)
-				.annotationIntrospector(annotationIntrospector)
+				.annotationIntrospector(introspector)
+				.annotationIntrospector(current -> AnnotationIntrospector.pair(current, introspector))
 				.featuresToEnable(SerializationFeature.FAIL_ON_EMPTY_BEANS,
 						DeserializationFeature.UNWRAP_ROOT_VALUE,
 						JsonParser.Feature.ALLOW_BACKSLASH_ESCAPING_ANY_CHARACTER,
@@ -470,8 +488,13 @@ public class Jackson2ObjectMapperBuilderTests {
 		Deserializers deserializers = getDeserializerFactoryConfig(mapper).deserializers().iterator().next();
 		assertThat(deserializers.findBeanDeserializer(SimpleType.construct(Date.class), null, null)).isSameAs(deserializer);
 
-		assertThat(mapper.getSerializationConfig().getAnnotationIntrospector()).isSameAs(annotationIntrospector);
-		assertThat(mapper.getDeserializationConfig().getAnnotationIntrospector()).isSameAs(annotationIntrospector);
+		AnnotationIntrospectorPair pair1 =
+				(AnnotationIntrospectorPair) mapper.getSerializationConfig().getAnnotationIntrospector();
+		AnnotationIntrospectorPair pair2 =
+				(AnnotationIntrospectorPair) mapper.getDeserializationConfig().getAnnotationIntrospector();
+
+		assertThat(pair1.allIntrospectors()).containsExactly(introspector, introspector);
+		assertThat(pair2.allIntrospectors()).containsExactly(introspector, introspector);
 
 		assertThat(mapper.getSerializationConfig().isEnabled(SerializationFeature.FAIL_ON_EMPTY_BEANS)).isTrue();
 		assertThat(mapper.getDeserializationConfig().isEnabled(DeserializationFeature.UNWRAP_ROOT_VALUE)).isTrue();

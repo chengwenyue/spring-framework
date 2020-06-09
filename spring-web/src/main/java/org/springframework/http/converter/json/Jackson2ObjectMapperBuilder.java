@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2019 the original author or authors.
+ * Copyright 2002-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.TimeZone;
+import java.util.function.Consumer;
+import java.util.function.Function;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.JsonFilter;
@@ -45,6 +47,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyNamingStrategy;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.cfg.HandlerInstantiator;
+import com.fasterxml.jackson.databind.introspect.AnnotationIntrospectorPair;
 import com.fasterxml.jackson.databind.jsontype.TypeResolverBuilder;
 import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.fasterxml.jackson.databind.ser.FilterProvider;
@@ -141,7 +144,7 @@ public class Jackson2ObjectMapperBuilder {
 	private TypeResolverBuilder<?> defaultTyping;
 
 	@Nullable
-	private JsonInclude.Include serializationInclusion;
+	private JsonInclude.Value serializationInclusion;
 
 	@Nullable
 	private FilterProvider filters;
@@ -166,6 +169,9 @@ public class Jackson2ObjectMapperBuilder {
 
 	@Nullable
 	private Boolean defaultUseWrapper;
+
+	@Nullable
+	private Consumer<ObjectMapper> configurer;
 
 
 	/**
@@ -261,6 +267,23 @@ public class Jackson2ObjectMapperBuilder {
 	}
 
 	/**
+	 * Alternative to {@link #annotationIntrospector(AnnotationIntrospector)}
+	 * that allows combining with rather than replacing the currently set
+	 * introspector, e.g. via
+	 * {@link AnnotationIntrospectorPair#pair(AnnotationIntrospector, AnnotationIntrospector)}.
+	 * @param pairingFunction a function to apply to the currently set
+	 * introspector (possibly {@code null}); the result of the function becomes
+	 * the new introspector.
+	 * @since 5.2.4
+	 */
+	public Jackson2ObjectMapperBuilder annotationIntrospector(
+			Function<AnnotationIntrospector, AnnotationIntrospector> pairingFunction) {
+
+		this.annotationIntrospector = pairingFunction.apply(this.annotationIntrospector);
+		return this;
+	}
+
+	/**
 	 * Specify a {@link com.fasterxml.jackson.databind.PropertyNamingStrategy} to
 	 * configure the {@link ObjectMapper} with.
 	 */
@@ -282,7 +305,16 @@ public class Jackson2ObjectMapperBuilder {
 	 * Set a custom inclusion strategy for serialization.
 	 * @see com.fasterxml.jackson.annotation.JsonInclude.Include
 	 */
-	public Jackson2ObjectMapperBuilder serializationInclusion(JsonInclude.Include serializationInclusion) {
+	public Jackson2ObjectMapperBuilder serializationInclusion(JsonInclude.Include inclusion) {
+		return serializationInclusion(JsonInclude.Value.construct(inclusion, inclusion));
+	}
+
+	/**
+	 * Set a custom inclusion strategy for serialization.
+	 * @since 5.3
+	 * @see com.fasterxml.jackson.annotation.JsonInclude.Value
+	 */
+	public Jackson2ObjectMapperBuilder serializationInclusion(JsonInclude.Value serializationInclusion) {
 		this.serializationInclusion = serializationInclusion;
 		return this;
 	}
@@ -611,6 +643,19 @@ public class Jackson2ObjectMapperBuilder {
 		return this;
 	}
 
+	/**
+	 * An option to apply additional customizations directly to the
+	 * {@code ObjectMapper} instances at the end, after all other config
+	 * properties of the builder have been applied.
+	 * @param configurer a configurer to apply; if invoked multiple times, all
+	 * configurers are applied in the same order.
+	 * @since 5.3
+	 */
+	public Jackson2ObjectMapperBuilder postConfigurer(Consumer<ObjectMapper> configurer) {
+		this.configurer = (this.configurer != null ? this.configurer.andThen(configurer) : configurer);
+		return this;
+	}
+
 
 	/**
 	 * Build a new {@link ObjectMapper} instance.
@@ -684,7 +729,7 @@ public class Jackson2ObjectMapperBuilder {
 			objectMapper.setDefaultTyping(this.defaultTyping);
 		}
 		if (this.serializationInclusion != null) {
-			objectMapper.setSerializationInclusion(this.serializationInclusion);
+			objectMapper.setDefaultPropertyInclusion(this.serializationInclusion);
 		}
 
 		if (this.filters != null) {
@@ -711,6 +756,10 @@ public class Jackson2ObjectMapperBuilder {
 		else if (this.applicationContext != null) {
 			objectMapper.setHandlerInstantiator(
 					new SpringHandlerInstantiator(this.applicationContext.getAutowireCapableBeanFactory()));
+		}
+
+		if (this.configurer != null) {
+			this.configurer.accept(objectMapper);
 		}
 	}
 

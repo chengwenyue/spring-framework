@@ -122,9 +122,14 @@ abstract class ConfigurationClassUtils {
 		}
 
 		Map<String, Object> config = metadata.getAnnotationAttributes(Configuration.class.getName());
+		// 如果有Configuration注解并且proxyBeanMethods为true 类型才为 full
 		if (config != null && !Boolean.FALSE.equals(config.get("proxyBeanMethods"))) {
 			beanDef.setAttribute(CONFIGURATION_CLASS_ATTRIBUTE, CONFIGURATION_CLASS_FULL);
 		}
+		// 如果没有Configuration注解，但是满足isConfigurationCandidate条件也可以参与解析 类型为 lite
+		// 1. 如果是接口直接返回false
+		// 2. 如果包含Component ComponentScan Import ImportResource 则满足条件
+		// 3. 如果方法中有Bean注解，即使类上不加注解，也可以参与解析
 		else if (config != null || isConfigurationCandidate(metadata)) {
 			beanDef.setAttribute(CONFIGURATION_CLASS_ATTRIBUTE, CONFIGURATION_CLASS_LITE);
 		}

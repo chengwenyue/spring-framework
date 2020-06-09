@@ -298,6 +298,7 @@ public class AutowiredAnnotationBeanPostProcessor extends InstantiationAwareBean
 			// Fully synchronized resolution now...
 			synchronized (this.candidateConstructorsCache) {
 				candidateConstructors = this.candidateConstructorsCache.get(beanClass);
+				// double check
 				if (candidateConstructors == null) {
 					Constructor<?>[] rawCandidates;
 					try {

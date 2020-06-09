@@ -1,0 +1,30 @@
+plugins {
+    id 'java'
+}
+
+group 'org.springframework'
+version '5.2.3.BUILD-SNAPSHOT'
+
+sourceCompatibility = 1.8
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    compile(project(":spring-context"))
+    compile(project(":spring-jcl"))
+    compile(project(":spring-tx"))
+    compile group: 'com.alibaba', name: 'fastjson', version: '1.2.62'
+    // https://mvnrepository.com/artifact/org.slf4j/slf4j-api
+    compile group: 'org.slf4j', name: 'slf4j-api', version: '1.7.25'
+    compile group: 'ch.qos.logback', name: 'logback-core', version: '1.2.3'
+    compile 'ch.qos.logback:logback-classic:1.2.3'
+    compile group: 'commons-io', name: 'commons-io', version: '2.6'
+    compile group: 'org.aspectj', name: 'aspectjrt', version: '1.9.5'
+    // https://mvnrepository.com/artifact/org.aspectj/aspectjweaver
+//    compile group: 'org.aspectj', name: 'aspectjweaver', version: '1.9.5'
+    compile("org.aspectj:aspectjweaver")
+
+
+}

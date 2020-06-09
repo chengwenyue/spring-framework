@@ -141,6 +141,7 @@ class ConfigurationClassBeanDefinitionReader {
 			registerBeanDefinitionForImportedConfigurationClass(configClass);
 		}
 		for (BeanMethod beanMethod : configClass.getBeanMethods()) {
+			// 加载@Bean的Bd
 			loadBeanDefinitionsForBeanMethod(beanMethod);
 		}
 
@@ -217,21 +218,27 @@ class ConfigurationClassBeanDefinitionReader {
 
 		if (metadata.isStatic()) {
 			// static @Bean method
+			// 静态方法不需要Java对象存在也可以调用
 			if (configClass.getMetadata() instanceof StandardAnnotationMetadata) {
+				// java反射的直接能获取到类
 				beanDef.setBeanClass(((StandardAnnotationMetadata) configClass.getMetadata()).getIntrospectedClass());
 			}
 			else {
+				// asm只能获取类名
 				beanDef.setBeanClassName(configClass.getMetadata().getClassName());
 			}
+			// 设置工厂方法
 			beanDef.setUniqueFactoryMethodName(methodName);
 		}
 		else {
 			// instance @Bean method
+			// 非静态的需要Java对象，因此需要设置一个factoryBeanName
 			beanDef.setFactoryBeanName(configClass.getBeanName());
 			beanDef.setUniqueFactoryMethodName(methodName);
 		}
 
 		if (metadata instanceof StandardMethodMetadata) {
+			// 设置java反射得到的方法，asm没有
 			beanDef.setResolvedFactoryMethod(((StandardMethodMetadata) metadata).getIntrospectedMethod());
 		}
 

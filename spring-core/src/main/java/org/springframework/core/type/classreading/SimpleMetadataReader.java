@@ -30,6 +30,11 @@ import org.springframework.lang.Nullable;
 /**
  * {@link MetadataReader} implementation based on an ASM
  * {@link org.springframework.asm.ClassReader}.
+ * Java反射和ASM对比
+ * 1. 反射只能读取类信息，而 ASM 除了读还能写。
+ * 2. 反射读取类信息时需要进行类加载处理，而 ASM 则不需要将类加载到内存中。
+ * 3. 反射相对于 ASM 来说使用方便，想直接操纵 ASM 的话需要有 JVM 指令基础。
+ * 4. 反射是读取持久堆上存储的类信息。而 ASM 是直接处理 .class 字节码的小工具（工具虽小，但是功能非常强大！）
  *
  * @author Juergen Hoeller
  * @author Costin Leau

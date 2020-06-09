@@ -242,10 +242,13 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 	protected <T> T doGetBean(final String name, @Nullable final Class<T> requiredType,
 			@Nullable final Object[] args, boolean typeCheckOnly) throws BeansException {
 
+		// 1. 如果以&开头，去除&。
+		// 2. 如果是alias，获取对应的真实的beanName
 		final String beanName = transformedBeanName(name);
 		Object bean;
 
 		// Eagerly check singleton cache for manually registered singletons.
+		// 饥饿检查单例缓存是否有手动注册的单例。
 		Object sharedInstance = getSingleton(beanName);
 		if (sharedInstance != null && args == null) {
 			if (logger.isTraceEnabled()) {
@@ -257,6 +260,9 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 					logger.trace("Returning cached instance of singleton bean '" + beanName + "'");
 				}
 			}
+			// 1. 如果name以&开头，则返回FactoryBean对象
+			// 2. 如果name不以&开头，并且为FactoryBean，返回FactoryBean中的getObject对象
+			// 3. 如果name不以&开头，并且不是FactoryBean，返回sharedInstance
 			bean = getObjectForBeanInstance(sharedInstance, name, beanName, null);
 		}
 
@@ -289,7 +295,10 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 				}
 			}
 
+			//
 			if (!typeCheckOnly) {
+				// 标记bean正在被创建，清除之前的MergedBeanDef，重新合并
+				// 如果源beanDef被修改，也能重新获取到修改的值
 				markBeanAsCreated(beanName);
 			}
 
@@ -1315,6 +1324,7 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 				mbd = this.mergedBeanDefinitions.get(beanName);
 			}
 
+			// 1. 依据当前bd，构建一个RootBeanDefinition
 			if (mbd == null || mbd.stale) {
 				previous = mbd;
 				if (bd.getParentName() == null) {
@@ -1354,7 +1364,7 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 					mbd = new RootBeanDefinition(pbd);
 					mbd.overrideFrom(bd);
 				}
-
+				// 2. 设置scope
 				// Set default singleton scope, if not configured before.
 				if (!StringUtils.hasLength(mbd.getScope())) {
 					mbd.setScope(SCOPE_SINGLETON);

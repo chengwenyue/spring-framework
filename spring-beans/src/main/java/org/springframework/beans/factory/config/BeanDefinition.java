@@ -161,6 +161,7 @@ public interface BeanDefinition extends AttributeAccessor, BeanMetadataElement {
 	String[] getDependsOn();
 
 	/**
+	 * 设置是否作为spring的自动注入的候选bean
 	 * Set whether this bean is a candidate for getting autowired into some other bean.
 	 * <p>Note that this flag is designed to only affect type-based autowiring.
 	 * It does not affect explicit references by name, which will get resolved even
@@ -175,6 +176,7 @@ public interface BeanDefinition extends AttributeAccessor, BeanMetadataElement {
 	boolean isAutowireCandidate();
 
 	/**
+	 * 设置是否为首要候选bean
 	 * Set whether this bean is a primary autowire candidate.
 	 * <p>If this value is {@code true} for exactly one bean among multiple
 	 * matching candidates, it will serve as a tie-breaker.
@@ -231,6 +233,7 @@ public interface BeanDefinition extends AttributeAccessor, BeanMetadataElement {
 	}
 
 	/**
+	 * 返回一个能被bean实例使用的property values
 	 * Return the property values to be applied to a new instance of the bean.
 	 * <p>The returned instance can be modified during bean factory post-processing.
 	 * @return the MutablePropertyValues object (never {@code null})
@@ -308,6 +311,7 @@ public interface BeanDefinition extends AttributeAccessor, BeanMetadataElement {
 	// Read-only attributes
 
 	/**
+	 * 类型解析器
 	 * Return a resolvable type for this bean definition,
 	 * based on the bean class or other specific metadata.
 	 * <p>This is typically fully resolved on a runtime-merged bean definition

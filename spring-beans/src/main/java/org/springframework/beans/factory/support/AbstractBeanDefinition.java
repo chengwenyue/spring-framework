@@ -193,6 +193,7 @@ public abstract class AbstractBeanDefinition extends BeanMetadataAttributeAccess
 
 	private boolean enforceDestroyMethod = true;
 
+	// Java合成类
 	private boolean synthetic = false;
 
 	private int role = BeanDefinition.ROLE_APPLICATION;
@@ -235,7 +236,8 @@ public abstract class AbstractBeanDefinition extends BeanMetadataAttributeAccess
 		setRole(original.getRole());
 		setSource(original.getSource());
 		copyAttributesFrom(original);
-
+		// 如果继承AbstractBeanDefinition，则继续填充AbstractBeanDefinition属性
+		// 反之，填充BeanDefinition接口提供的属性
 		if (original instanceof AbstractBeanDefinition) {
 			AbstractBeanDefinition originalAbd = (AbstractBeanDefinition) original;
 			if (originalAbd.hasBeanClass()) {

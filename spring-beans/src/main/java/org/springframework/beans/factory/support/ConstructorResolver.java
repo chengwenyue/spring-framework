@@ -132,10 +132,12 @@ class ConstructorResolver {
 		ArgumentsHolder argsHolderToUse = null;
 		Object[] argsToUse = null;
 
+		// 1. 优先使用外部传入的参数
 		if (explicitArgs != null) {
 			argsToUse = explicitArgs;
 		}
 		else {
+			// 2. 判断是否有过构造器缓存，如果有，使用构造器缓存构造对象
 			Object[] argsToResolve = null;
 			synchronized (mbd.constructorArgumentLock) {
 				constructorToUse = (Constructor<?>) mbd.resolvedConstructorOrFactoryMethod;
@@ -152,8 +154,10 @@ class ConstructorResolver {
 			}
 		}
 
+		// 3. 如果没有构造器缓存，在候选的构造器中选择一个合适的构造器
 		if (constructorToUse == null || argsToUse == null) {
 			// Take specified constructors, if any.
+			// 4. 优先使用外部提供的构造器，如果没有获取bean中所有的构造器
 			Constructor<?>[] candidates = chosenCtors;
 			if (candidates == null) {
 				Class<?> beanClass = mbd.getBeanClass();
@@ -167,7 +171,7 @@ class ConstructorResolver {
 							"] from ClassLoader [" + beanClass.getClassLoader() + "] failed", ex);
 				}
 			}
-
+			// 5. 判读是不是只有一个默认空实现的构造器，如果有是直接执行
 			if (candidates.length == 1 && explicitArgs == null && !mbd.hasConstructorArgumentValues()) {
 				Constructor<?> uniqueCandidate = candidates[0];
 				if (uniqueCandidate.getParameterCount() == 0) {
@@ -182,10 +186,13 @@ class ConstructorResolver {
 			}
 
 			// Need to resolve the constructor.
+			// 6. 在外部构造器不为空或者注入模型为AUTOWIRE_CONSTRUCTOR时，强制使用构造参数注入
+			// 如果为true，spring构造参数时先使用
 			boolean autowiring = (chosenCtors != null ||
 					mbd.getResolvedAutowireMode() == AutowireCapableBeanFactory.AUTOWIRE_CONSTRUCTOR);
 			ConstructorArgumentValues resolvedValues = null;
 
+			// 7. 从外部构造参数和beanDef中的构造参数中获取构造函数最小的参数个数，低于这个值的构造函数都不符合
 			int minNrOfArgs;
 			if (explicitArgs != null) {
 				minNrOfArgs = explicitArgs.length;
@@ -196,26 +203,46 @@ class ConstructorResolver {
 				minNrOfArgs = resolveConstructorArguments(beanName, mbd, bw, cargs, resolvedValues);
 			}
 
+			// 8. 根据访问权限和参数个数进行排序，访问权限越高参数越多的越靠前
 			AutowireUtils.sortConstructors(candidates);
+			// 构造参数和提供的参数之间的差异值
 			int minTypeDiffWeight = Integer.MAX_VALUE;
+			// 模糊的构造器
 			Set<Constructor<?>> ambiguousConstructors = null;
 			LinkedList<UnsatisfiedDependencyException> causes = null;
 
+			// 9 循环所有的候选的构造器
 			for (Constructor<?> candidate : candidates) {
 
 				int parameterCount = candidate.getParameterCount();
-
+				// 如果找到一个构造器，并且参数比当前构造器多，说明已经找到一个合适的构造器了
 				if (constructorToUse != null && argsToUse != null && argsToUse.length > parameterCount) {
 					// Already found greedy constructor that can be satisfied ->
 					// do not look any further, there are only less greedy constructors left.
 					break;
 				}
-				if (parameterCount < minNrOfArgs) {
+				if (parameterCount < minNrOfArgs) { // 跳过比最小参数个数的构造器
 					continue;
 				}
 
 				ArgumentsHolder argsHolder;
 				Class<?>[] paramTypes = candidate.getParameterTypes();
+				// 10. 构造参数来自3个地方
+				// 1. 外部传入的explicitArgs
+				// 2. beanDef中的ConstructorArgumentValues
+				//    2.1 ConstructorArgumentValues中indexedArgumentValues
+				//    2.2 ConstructorArgumentValues中genericArgumentValues
+				// 3. 容器中的其他bean
+				// 优先级依次降低，
+				// 如果 autowiring = true spring会从容器中填充参数
+
+				// 要满足autowiring = true ，必须要再推断构造函数时能找到构造函数，
+				// 也就意味着一个类的构造函数满足如下条件
+		 		// 1. 只有一个并且有参，返回值不为空
+				// 2. 有Autowire的
+				//    2.1 只有一个Autowire = true
+				//    2.2 有多个Autowire = false
+
 				if (resolvedValues != null) {
 					try {
 						String[] paramNames = ConstructorPropertiesChecker.evaluate(candidate, parameterCount);
@@ -225,6 +252,7 @@ class ConstructorResolver {
 								paramNames = pnd.getParameterNames(candidate);
 							}
 						}
+						// 依据beanDef和autowiring找到所需的构造参数，如果构造参数不够，则放弃这个构造器
 						argsHolder = createArgumentArray(beanName, mbd, resolvedValues, bw, paramTypes, paramNames,
 								getUserDeclaredConstructor(candidate), autowiring, candidates.length == 1);
 					}
@@ -242,12 +270,14 @@ class ConstructorResolver {
 				}
 				else {
 					// Explicit arguments given -> arguments length must match exactly.
+					// 找到一个构造函数和给定参数数量一致的构造函数
 					if (parameterCount != explicitArgs.length) {
 						continue;
 					}
 					argsHolder = new ArgumentsHolder(explicitArgs);
 				}
-
+				// 11. 计算找到的构造器参数和实际构造器需要的参数之间的差异值
+				// 使用差异值最小的构造器
 				int typeDiffWeight = (mbd.isLenientConstructorResolution() ?
 						argsHolder.getTypeDifferenceWeight(paramTypes) : argsHolder.getAssignabilityWeight(paramTypes));
 				// Choose this constructor if it represents the closest match.
@@ -258,6 +288,7 @@ class ConstructorResolver {
 					minTypeDiffWeight = typeDiffWeight;
 					ambiguousConstructors = null;
 				}
+				// 如果差异值相同，则放入模糊的构造器列表中，再严格模式下，存在模糊列表会报错
 				else if (constructorToUse != null && typeDiffWeight == minTypeDiffWeight) {
 					if (ambiguousConstructors == null) {
 						ambiguousConstructors = new LinkedHashSet<>();
@@ -279,6 +310,7 @@ class ConstructorResolver {
 						"Could not resolve matching constructor " +
 						"(hint: specify index/type/name arguments for simple parameters to avoid type ambiguities)");
 			}
+			// 是否是严格模式，如果是严格模式直接抛出异常
 			else if (ambiguousConstructors != null && !mbd.isLenientConstructorResolution()) {
 				throw new BeanCreationException(mbd.getResourceDescription(), beanName,
 						"Ambiguous constructor matches found in bean '" + beanName + "' " +
@@ -286,11 +318,14 @@ class ConstructorResolver {
 						ambiguousConstructors);
 			}
 
+			// 12. 缓存构造器和构造参数到beanDef中
 			if (explicitArgs == null && argsHolderToUse != null) {
+				//缓存构造方法
 				argsHolderToUse.storeCache(mbd, constructorToUse);
 			}
 		}
 
+		//13. 使用构造器和构造参数创建对象
 		Assert.state(argsToUse != null, "Unresolved constructor arguments");
 		bw.setBeanInstance(instantiate(beanName, mbd, constructorToUse, argsToUse));
 		return bw;
@@ -335,6 +370,7 @@ class ConstructorResolver {
 		Assert.state(factoryClass != null, "Unresolvable factory class");
 		factoryClass = ClassUtils.getUserClass(factoryClass);
 
+		// 获取当前class所有方法
 		Method[] candidates = getCandidateMethods(factoryClass, mbd);
 		Method uniqueCandidate = null;
 		for (Method candidate : candidates) {
@@ -739,6 +775,10 @@ class ConstructorResolver {
 				// If we couldn't find a direct match and are not supposed to autowire,
 				// let's try the next generic, untyped argument value as fallback:
 				// it could match after type conversion (for example, String -> int).
+
+				// autowiring = false 或者  构造器参数和提供的参数个数相同
+				// spring会使用GenericArgumentValue并执行类型转换
+				// 优先充分利用ArgumentValue，如果使用不了，在利用容器
 				if (valueHolder == null && (!autowiring || paramTypes.length == resolvedValues.getArgumentCount())) {
 					valueHolder = resolvedValues.getGenericArgumentValue(null, null, usedValueHolders);
 				}

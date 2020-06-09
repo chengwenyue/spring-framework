@@ -427,11 +427,15 @@ public class ClassPathScanningCandidateComponentProvider implements EnvironmentC
 				}
 				if (resource.isReadable()) {
 					try {
+						// 读取类文件上的注解，使用asm框架读取
 						MetadataReader metadataReader = getMetadataReaderFactory().getMetadataReader(resource);
+						// 1. 判断是否包含 @Component
+						// 2. @Conditional 判断条件注入
 						if (isCandidateComponent(metadataReader)) {
 							ScannedGenericBeanDefinition sbd = new ScannedGenericBeanDefinition(metadataReader);
 							sbd.setResource(resource);
 							sbd.setSource(resource);
+							// 判断时候符合bd的规则
 							if (isCandidateComponent(sbd)) {
 								if (debugEnabled) {
 									logger.debug("Identified candidate component class: " + resource);
@@ -495,6 +499,7 @@ public class ClassPathScanningCandidateComponentProvider implements EnvironmentC
 		}
 		for (TypeFilter tf : this.includeFilters) {
 			if (tf.match(metadataReader, getMetadataReaderFactory())) {
+				// @Conditional 判断条件注入
 				return isConditionMatch(metadataReader);
 			}
 		}

@@ -7,7 +7,7 @@
 	</module>
 
 	<!-- Root Checks -->
-	<module name="io.spring.javaformat.checkstyle.check.SpringHeaderCheck">
+	<module name="io.cwy.demo.spring.javaformat.checkstyle.check.SpringHeaderCheck">
 		<property name="fileExtensions" value="java" />
 		<property name="headerType" value="apache2"/>
 		<property name="headerCopyrightPattern" value="20\d\d-20\d\d"/>
@@ -77,8 +77,8 @@
 		</module>
 		<module name="com.puppycrawl.tools.checkstyle.checks.coding.MultipleVariableDeclarationsCheck" />
 
-		<module name="io.spring.javaformat.checkstyle.filter.RequiresOuterThisFilter" />
-		<module name="io.spring.javaformat.checkstyle.filter.IdentCheckFilter">
+		<module name="io.cwy.demo.spring.javaformat.checkstyle.filter.RequiresOuterThisFilter" />
+		<module name="io.cwy.demo.spring.javaformat.checkstyle.filter.IdentCheckFilter">
 			<property name="names" value="logger" />
 			<module
 				name="com.puppycrawl.tools.checkstyle.checks.coding.RequireThisCheck">
@@ -86,7 +86,7 @@
 				<property name="validateOnlyOverlapping" value="false" />
 			</module>
 		</module>
-		<module name="io.spring.javaformat.checkstyle.check.SpringNoThisCheck">
+		<module name="io.cwy.demo.spring.javaformat.checkstyle.check.SpringNoThisCheck">
 			<property name="names" value="logger" />
 		</module>
 		<module name="com.puppycrawl.tools.checkstyle.checks.coding.OneStatementPerLineCheck" />
@@ -234,11 +234,11 @@
 		</module>
 
 		<!-- Spring Conventions -->
-		<module name="io.spring.javaformat.checkstyle.check.SpringLambdaCheck">
+		<module name="io.cwy.demo.spring.javaformat.checkstyle.check.SpringLambdaCheck">
 			<property name="singleArgumentParentheses" value="false" />
 		</module>
-		<module name="io.spring.javaformat.checkstyle.check.SpringCatchCheck" />
-		<module name="io.spring.javaformat.checkstyle.check.SpringJavadocCheck" />
-		<module name="io.spring.javaformat.checkstyle.check.SpringJUnit5Check" />
+		<module name="io.cwy.demo.spring.javaformat.checkstyle.check.SpringCatchCheck" />
+		<module name="io.cwy.demo.spring.javaformat.checkstyle.check.SpringJavadocCheck" />
+		<module name="io.cwy.demo.spring.javaformat.checkstyle.check.SpringJUnit5Check" />
  	</module>
 </module>

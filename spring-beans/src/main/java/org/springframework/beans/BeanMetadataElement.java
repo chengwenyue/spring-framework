@@ -21,7 +21,7 @@ import org.springframework.lang.Nullable;
 /**
  * Interface to be implemented by bean metadata elements
  * that carry a configuration source object.
- *
+ *	Java类的元数据，是存在磁盘的类文件
  * @author Juergen Hoeller
  * @since 2.0
  */

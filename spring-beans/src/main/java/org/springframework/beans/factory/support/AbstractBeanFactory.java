@@ -75,6 +75,8 @@ import org.springframework.core.NamedThreadLocal;
 import org.springframework.core.ResolvableType;
 import org.springframework.core.convert.ConversionService;
 import org.springframework.core.log.LogMessage;
+import org.springframework.core.metrics.ApplicationStartup;
+import org.springframework.core.metrics.StartupStep;
 import org.springframework.lang.Nullable;
 import org.springframework.util.Assert;
 import org.springframework.util.ClassUtils;
@@ -178,6 +180,8 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 	private final ThreadLocal<Object> prototypesCurrentlyInCreation =
 			new NamedThreadLocal<>("Prototype beans currently in creation");
 
+	/** Application startup metrics. **/
+	private ApplicationStartup applicationStartup = ApplicationStartup.DEFAULT;
 
 	/**
 	 * Create a new AbstractBeanFactory.
@@ -241,16 +245,14 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 	 * @throws BeansException if the bean could not be created
 	 */
 	@SuppressWarnings("unchecked")
-	protected <T> T doGetBean(final String name, @Nullable final Class<T> requiredType,
-			@Nullable final Object[] args, boolean typeCheckOnly) throws BeansException {
+	protected <T> T doGetBean(
+			String name, @Nullable Class<T> requiredType, @Nullable Object[] args, boolean typeCheckOnly)
+			throws BeansException {
 
-		// 1. 如果以&开头，去除&。
-		// 2. 如果是alias，获取对应的真实的beanName
-		final String beanName = transformedBeanName(name);
+		String beanName = transformedBeanName(name);
 		Object bean;
 
 		// Eagerly check singleton cache for manually registered singletons.
-		// 饥饿检查单例缓存是否有手动注册的单例。
 		Object sharedInstance = getSingleton(beanName);
 		if (sharedInstance != null && args == null) {
 			if (logger.isTraceEnabled()) {
@@ -262,9 +264,6 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 					logger.trace("Returning cached instance of singleton bean '" + beanName + "'");
 				}
 			}
-			// 1. 如果name以&开头，则返回FactoryBean对象
-			// 2. 如果name不以&开头，并且为FactoryBean，返回FactoryBean中的getObject对象
-			// 3. 如果name不以&开头，并且不是FactoryBean，返回sharedInstance
 			bean = getObjectForBeanInstance(sharedInstance, name, beanName, null);
 		}
 
@@ -297,15 +296,17 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 				}
 			}
 
-			//
 			if (!typeCheckOnly) {
-				// 标记bean正在被创建，清除之前的MergedBeanDef，重新合并
-				// 如果源beanDef被修改，也能重新获取到修改的值
 				markBeanAsCreated(beanName);
 			}
 
 			try {
-				final RootBeanDefinition mbd = getMergedLocalBeanDefinition(beanName);
+				StartupStep beanCreation = this.applicationStartup.start("spring.beans.instantiate")
+						.tag("beanName", name);
+				if (requiredType != null) {
+					beanCreation.tag("beanType", requiredType::toString);
+				}
+				RootBeanDefinition mbd = getMergedLocalBeanDefinition(beanName);
 				checkMergedBeanDefinition(mbd, beanName, args);
 
 				// Guarantee initialization of beans that the current bean depends on.
@@ -362,7 +363,7 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 					if (!StringUtils.hasLength(scopeName)) {
 						throw new IllegalStateException("No scope name defined for bean ´" + beanName + "'");
 					}
-					final Scope scope = this.scopes.get(scopeName);
+					Scope scope = this.scopes.get(scopeName);
 					if (scope == null) {
 						throw new IllegalStateException("No Scope registered for scope name '" + scopeName + "'");
 					}
@@ -382,6 +383,7 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 						throw new ScopeNotActiveException(beanName, scopeName, ex);
 					}
 				}
+				beanCreation.end();
 			}
 			catch (BeansException ex) {
 				cleanupAfterBeanCreationFailure(beanName);
@@ -483,10 +485,12 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 			return false;
 		}
 		if (isFactoryBean(beanName, mbd)) {
-			final FactoryBean<?> fb = (FactoryBean<?>) getBean(FACTORY_BEAN_PREFIX + beanName);
+			FactoryBean<?> fb = (FactoryBean<?>) getBean(FACTORY_BEAN_PREFIX + beanName);
 			if (System.getSecurityManager() != null) {
-				return AccessController.doPrivileged((PrivilegedAction<Boolean>) () ->
-						((fb instanceof SmartFactoryBean && ((SmartFactoryBean<?>) fb).isPrototype()) || !fb.isSingleton()),
+				return AccessController.doPrivileged(
+						(PrivilegedAction<Boolean>) () ->
+								((fb instanceof SmartFactoryBean && ((SmartFactoryBean<?>) fb).isPrototype()) ||
+										!fb.isSingleton()),
 						getAccessControlContext());
 			}
 			else {
@@ -1050,6 +1054,17 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 		this.securityContextProvider = securityProvider;
 	}
 
+	@Override
+	public void setApplicationStartup(ApplicationStartup applicationStartup) {
+		Assert.notNull(applicationStartup, "applicationStartup should not be null");
+		this.applicationStartup = applicationStartup;
+	}
+
+	@Override
+	public ApplicationStartup getApplicationStartup() {
+		return this.applicationStartup;
+	}
+
 	/**
 	 * Delegate the creation of the access control context to the
 	 * {@link #setSecurityContextProvider SecurityContextProvider}.
@@ -1359,7 +1374,6 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 				mbd = this.mergedBeanDefinitions.get(beanName);
 			}
 
-			// 1. 依据当前bd，构建一个RootBeanDefinition
 			if (mbd == null || mbd.stale) {
 				previous = mbd;
 				if (bd.getParentName() == null) {
@@ -1387,7 +1401,7 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 							else {
 								throw new NoSuchBeanDefinitionException(parentBeanName,
 										"Parent name '" + parentBeanName + "' is equal to bean name '" + beanName +
-										"': cannot be resolved without a ConfigurableBeanFactory parent");
+												"': cannot be resolved without a ConfigurableBeanFactory parent");
 							}
 						}
 					}
@@ -1399,7 +1413,7 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 					mbd = new RootBeanDefinition(pbd);
 					mbd.overrideFrom(bd);
 				}
-				// 2. 设置scope
+
 				// Set default singleton scope, if not configured before.
 				if (!StringUtils.hasLength(mbd.getScope())) {
 					mbd.setScope(SCOPE_SINGLETON);
@@ -1498,7 +1512,7 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 	 * @throws CannotLoadBeanClassException if we failed to load the class
 	 */
 	@Nullable
-	protected Class<?> resolveBeanClass(final RootBeanDefinition mbd, String beanName, final Class<?>... typesToMatch)
+	protected Class<?> resolveBeanClass(RootBeanDefinition mbd, String beanName, Class<?>... typesToMatch)
 			throws CannotLoadBeanClassException {
 
 		try {
@@ -1506,8 +1520,8 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 				return mbd.getBeanClass();
 			}
 			if (System.getSecurityManager() != null) {
-				return AccessController.doPrivileged((PrivilegedExceptionAction<Class<?>>) () ->
-					doResolveBeanClass(mbd, typesToMatch), getAccessControlContext());
+				return AccessController.doPrivileged((PrivilegedExceptionAction<Class<?>>)
+						() -> doResolveBeanClass(mbd, typesToMatch), getAccessControlContext());
 			}
 			else {
 				return doResolveBeanClass(mbd, typesToMatch);
@@ -1696,7 +1710,7 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 					logger.trace(LogMessage.format("Bean creation exception on lazy FactoryBean type check: %s", ex));
 				}
 				else {
-					logger.debug(LogMessage.format("Bean creation exception on non-lazy FactoryBean type check: %s", ex));
+					logger.debug(LogMessage.format("Bean creation exception on eager FactoryBean type check: %s", ex));
 				}
 				onSuppressedException(ex);
 			}
@@ -2075,7 +2089,7 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 			super.replaceAll(operator);
 			beanPostProcessorCache = null;
 		}
-	};
+	}
 
 
 	/**

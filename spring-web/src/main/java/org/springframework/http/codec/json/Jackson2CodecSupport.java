@@ -18,18 +18,13 @@ package org.springframework.http.codec.json;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
-import java.nio.charset.Charset;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.annotation.JsonView;
-import com.fasterxml.jackson.core.JsonEncoding;
 import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.type.TypeFactory;
@@ -40,6 +35,7 @@ import org.springframework.core.MethodParameter;
 import org.springframework.core.ResolvableType;
 import org.springframework.core.codec.Hints;
 import org.springframework.http.HttpLogging;
+import org.springframework.http.MediaType;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.lang.Nullable;
@@ -77,11 +73,9 @@ public abstract class Jackson2CodecSupport {
 
 	private static final List<MimeType> DEFAULT_MIME_TYPES = Collections.unmodifiableList(
 			Arrays.asList(
-					new MimeType("application", "json"),
-					new MimeType("application", "*+json")));
-
-	private static final Map<String, JsonEncoding> ENCODINGS = jsonEncodings();
-
+					MediaType.APPLICATION_JSON,
+					new MediaType("application", "*+json"),
+					MediaType.APPLICATION_NDJSON));
 
 
 	protected final Log logger = HttpLogging.forLogName(getClass());
@@ -115,17 +109,7 @@ public abstract class Jackson2CodecSupport {
 
 
 	protected boolean supportsMimeType(@Nullable MimeType mimeType) {
-		if (mimeType == null) {
-			return true;
-		}
-		else if (this.mimeTypes.stream().noneMatch(m -> m.isCompatibleWith(mimeType))) {
-			return false;
-		}
-		else if (mimeType.getCharset() != null) {
-			Charset charset = mimeType.getCharset();
-			return ENCODINGS.containsKey(charset.name());
-		}
-		return true;
+		return (mimeType == null || this.mimeTypes.stream().anyMatch(m -> m.isCompatibleWith(mimeType)));
 	}
 
 	protected JavaType getJavaType(Type type, @Nullable Class<?> contextClass) {
@@ -162,11 +146,5 @@ public abstract class Jackson2CodecSupport {
 
 	@Nullable
 	protected abstract <A extends Annotation> A getAnnotation(MethodParameter parameter, Class<A> annotType);
-
-	private static Map<String, JsonEncoding> jsonEncodings() {
-		return EnumSet.allOf(JsonEncoding.class).stream()
-				.collect(Collectors.toMap(JsonEncoding::getJavaName, Function.identity()));
-	}
-
 
 }

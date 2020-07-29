@@ -1,6 +1,5 @@
 package cwy.demo.spring;
 
-import cwy.demo.spring.config.BeanFactoryPostProcessorDemo;
 import cwy.demo.spring.config.BeanPostProcessorDemo;
 import cwy.demo.spring.config.MyBeanDefinitionRegistryPostProcessor;
 import cwy.demo.spring.entity.Employee;
@@ -41,6 +40,7 @@ public class Main {
 
 		System.out.println(applicationContext.getBean(BeanPostProcessorDemo.class));
 
+//		applicationContext.getBean(ComponentClass.class);
 //		applicationContext.getBeanNamesForType(MyFactoryBean.class);
 //		System.out.println(applicationContext.getBean(MyFactoryBean.class));
 

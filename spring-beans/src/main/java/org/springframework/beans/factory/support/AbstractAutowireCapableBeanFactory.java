@@ -615,6 +615,9 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 		// 判断是否开启循环依赖，如果开启了，则需要从单例池中获取bean，并暴露出去。
 		if (earlySingletonExposure) {
 			Object earlySingletonReference = getSingleton(beanName, false);
+			// 代理对象不为空
+			//  1. 如果在初始化bean的过程中没有改变bean，则返回当前暴漏当前代理对象
+			//  2. 如果改变了bean，则
 			if (earlySingletonReference != null) {
 				if (exposedObject == bean) {
 					exposedObject = earlySingletonReference;
@@ -1112,8 +1115,10 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 			if (!mbd.isSynthetic() && hasInstantiationAwareBeanPostProcessors()) {
 				Class<?> targetType = determineTargetType(beanName, mbd);
 				if (targetType != null) {
+					// 调用Bean实例化前置方法
 					bean = applyBeanPostProcessorsBeforeInstantiation(targetType, beanName);
 					if (bean != null) {
+						// 如果返回的结果不为空，调用Bean后置处理器的 实例化后置方法
 						bean = applyBeanPostProcessorsAfterInitialization(bean, beanName);
 					}
 				}
@@ -1400,6 +1405,7 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 			}
 		}
 		// 属性填充
+		// 1. 获取bd中提供的属性
 		PropertyValues pvs = (mbd.hasPropertyValues() ? mbd.getPropertyValues() : null);
 
 		int resolvedAutowireMode = mbd.getResolvedAutowireMode();
@@ -1425,6 +1431,8 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 				pvs = mbd.getPropertyValues();
 			}
 			for (InstantiationAwareBeanPostProcessor bp : getBeanPostProcessorCache().instantiationAware) {
+				// 第4次调用后置处理器，完成属性注入
+				// 这里完成注入的属性是加了@Autowired，@Value，@Resource等
 				PropertyValues pvsToUse = bp.postProcessProperties(pvs, bw.getWrappedInstance(), beanName);
 				if (pvsToUse == null) {
 					if (filteredPds == null) {
@@ -1445,6 +1453,7 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 			checkDependencies(beanName, mbd, filteredPds, pvs);
 		}
 
+		//这里完成PropertyValues的属性值注入
 		if (pvs != null) {
 			applyPropertyValues(beanName, mbd, bw, pvs);
 		}

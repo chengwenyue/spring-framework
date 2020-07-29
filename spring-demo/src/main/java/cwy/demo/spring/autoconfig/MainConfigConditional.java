@@ -11,7 +11,7 @@ import java.util.Map;
  * @author cwy
  */
 @Configuration
-@Conditional(WindowsConditional.class)
+//@Conditional(WindowsConditional.class)
 public class MainConfigConditional {
     @Bean(value = "linux")
     @Conditional(LinuxConditional.class)

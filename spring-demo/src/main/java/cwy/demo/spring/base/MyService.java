@@ -11,7 +11,7 @@ import javax.annotation.PostConstruct;
  * @date 2020-03-14
  */
 @Component
-public class MyService {
+public class MyService{
 
 	/**
 	 * @Autowired 实际上是一种属性装配，可以理解为手动装配，类似xml方式的注入

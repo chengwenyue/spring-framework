@@ -169,14 +169,15 @@ public class MockHttpServletResponse implements HttpServletResponse {
 	public void setCharacterEncoding(String characterEncoding) {
 		this.characterEncoding = characterEncoding;
 		this.charset = true;
-		updateContentTypeHeader();
+		updateContentTypePropertyAndHeader();
 	}
 
-	private void updateContentTypeHeader() {
+	private void updateContentTypePropertyAndHeader() {
 		if (this.contentType != null) {
 			String value = this.contentType;
 			if (this.charset && !this.contentType.toLowerCase().contains(CHARSET_PREFIX)) {
 				value = value + ';' + CHARSET_PREFIX + this.characterEncoding;
+				this.contentType = value;
 			}
 			doAddHeaderValue(HttpHeaders.CONTENT_TYPE, value, true);
 		}
@@ -280,7 +281,7 @@ public class MockHttpServletResponse implements HttpServletResponse {
 					this.charset = true;
 				}
 			}
-			updateContentTypeHeader();
+			updateContentTypePropertyAndHeader();
 		}
 	}
 
@@ -331,6 +332,7 @@ public class MockHttpServletResponse implements HttpServletResponse {
 	public void reset() {
 		resetBuffer();
 		this.characterEncoding = null;
+		this.charset = false;
 		this.contentLength = 0;
 		this.contentType = null;
 		this.locale = Locale.getDefault();

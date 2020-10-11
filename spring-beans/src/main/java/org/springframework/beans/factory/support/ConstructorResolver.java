@@ -24,12 +24,13 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -209,7 +210,7 @@ class ConstructorResolver {
 			int minTypeDiffWeight = Integer.MAX_VALUE;
 			// 模糊的构造器
 			Set<Constructor<?>> ambiguousConstructors = null;
-			LinkedList<UnsatisfiedDependencyException> causes = null;
+			Deque<UnsatisfiedDependencyException> causes = null;
 
 			// 9 循环所有的候选的构造器
 			for (Constructor<?> candidate : candidates) {
@@ -261,7 +262,7 @@ class ConstructorResolver {
 						}
 						// Swallow and try next constructor.
 						if (causes == null) {
-							causes = new LinkedList<>();
+							causes = new ArrayDeque<>(1);
 						}
 						causes.add(ex);
 						continue;
@@ -547,7 +548,7 @@ class ConstructorResolver {
 				}
 			}
 
-			LinkedList<UnsatisfiedDependencyException> causes = null;
+			Deque<UnsatisfiedDependencyException> causes = null;
 
 			for (Method candidate : candidates) {
 				int parameterCount = candidate.getParameterCount();
@@ -580,7 +581,7 @@ class ConstructorResolver {
 							}
 							// Swallow and try next overloaded factory method.
 							if (causes == null) {
-								causes = new LinkedList<>();
+								causes = new ArrayDeque<>(1);
 							}
 							causes.add(ex);
 							continue;

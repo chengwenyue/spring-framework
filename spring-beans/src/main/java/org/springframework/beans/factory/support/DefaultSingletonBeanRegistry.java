@@ -84,7 +84,7 @@ public class DefaultSingletonBeanRegistry extends SimpleAliasRegistry implements
 
 	// 三级缓存
 	/** Cache of early singleton objects: bean name to bean instance. */
-	private final Map<String, Object> earlySingletonObjects = new HashMap<>(16);
+	private final Map<String, Object> earlySingletonObjects = new ConcurrentHashMap<>(16);
 
 	/** Set of registered singletons, containing the bean names in registration order. */
 	private final Set<String> registeredSingletons = new LinkedHashSet<>(256);
@@ -183,21 +183,29 @@ public class DefaultSingletonBeanRegistry extends SimpleAliasRegistry implements
 	@Nullable
 	protected Object getSingleton(String beanName, boolean allowEarlyReference) {
 		// 从一级缓存中取
+		// Quick check for existing instance without full singleton lock
 		Object singletonObject = this.singletonObjects.get(beanName);
 		// 如果当前bean正在被创建，利用二级缓存创建
 		if (singletonObject == null && isSingletonCurrentlyInCreation(beanName)) {
-			synchronized (this.singletonObjects) {
-				// 从三级缓存中取，取不到，在利用二级缓存创建
-				singletonObject = this.earlySingletonObjects.get(beanName);
-				if (singletonObject == null && allowEarlyReference) {
-					ObjectFactory<?> singletonFactory = this.singletonFactories.get(beanName);
-					if (singletonFactory != null) {
-						// 利用二级缓存创建
-						singletonObject = singletonFactory.getObject();
-						// 将对象缓存到三级缓存，下次再用时直接取三级缓存
-						this.earlySingletonObjects.put(beanName, singletonObject);
-						// 移除二级缓存，因为二级缓存是工厂方法，多次使用会有效率问题
-						this.singletonFactories.remove(beanName);
+			singletonObject = this.earlySingletonObjects.get(beanName);
+			if (singletonObject == null && allowEarlyReference) {
+				synchronized (this.singletonObjects) {
+					// 从三级缓存中取，取不到，在利用二级缓存创建
+					// Consistent creation of early reference within full singleton lock
+					singletonObject = this.singletonObjects.get(beanName);
+					if (singletonObject == null) {
+						singletonObject = this.earlySingletonObjects.get(beanName);
+						if (singletonObject == null) {
+							ObjectFactory<?> singletonFactory = this.singletonFactories.get(beanName);
+							if (singletonFactory != null) {
+								// 利用二级缓存创建
+								singletonObject = singletonFactory.getObject();
+								// 将对象缓存到三级缓存，下次再用时直接取三级缓存
+								this.earlySingletonObjects.put(beanName, singletonObject);
+								// 移除二级缓存，因为二级缓存是工厂方法，多次使用会有效率问题
+								this.singletonFactories.remove(beanName);
+							}
+						}
 					}
 				}
 			}

@@ -144,7 +144,7 @@ class MockHttpServletResponseTests {
 	void setContentTypeThenCharacterEncoding() {
 		response.setContentType("test/plain");
 		response.setCharacterEncoding("UTF-8");
-		assertThat(response.getContentType()).isEqualTo("test/plain");
+		assertThat(response.getContentType()).isEqualTo("test/plain;charset=UTF-8");
 		assertThat(response.getHeader(CONTENT_TYPE)).isEqualTo("test/plain;charset=UTF-8");
 		assertThat(response.getCharacterEncoding()).isEqualTo("UTF-8");
 	}
@@ -153,7 +153,7 @@ class MockHttpServletResponseTests {
 	void setCharacterEncodingThenContentType() {
 		response.setCharacterEncoding("UTF-8");
 		response.setContentType("test/plain");
-		assertThat(response.getContentType()).isEqualTo("test/plain");
+		assertThat(response.getContentType()).isEqualTo("test/plain;charset=UTF-8");
 		assertThat(response.getHeader(CONTENT_TYPE)).isEqualTo("test/plain;charset=UTF-8");
 		assertThat(response.getCharacterEncoding()).isEqualTo("UTF-8");
 	}
@@ -479,6 +479,29 @@ class MockHttpServletResponseTests {
 		assertThat(cookie.getSecure()).isTrue();
 		assertThat(cookie.isHttpOnly()).isTrue();
 		assertThat(((MockCookie) cookie).getSameSite()).isEqualTo("Lax");
+	}
+
+	@Test  // gh-25501
+	void resetResetsCharset() {
+		assertThat(response.isCharset()).isFalse();
+		response.setCharacterEncoding("UTF-8");
+		assertThat(response.isCharset()).isTrue();
+		assertThat(response.getCharacterEncoding()).isEqualTo("UTF-8");
+		response.setContentType("text/plain");
+		assertThat(response.getContentType()).isEqualTo("text/plain;charset=UTF-8");
+		String contentTypeHeader = response.getHeader(CONTENT_TYPE);
+		assertThat(contentTypeHeader).isEqualTo("text/plain;charset=UTF-8");
+
+		response.reset();
+
+		assertThat(response.isCharset()).isFalse();
+		// Do not invoke setCharacterEncoding() since that sets the charset flag to true.
+		// response.setCharacterEncoding("UTF-8");
+		response.setContentType("text/plain");
+		assertThat(response.isCharset()).isFalse(); // should still be false
+		assertThat(response.getContentType()).isEqualTo("text/plain");
+		contentTypeHeader = response.getHeader(CONTENT_TYPE);
+		assertThat(contentTypeHeader).isEqualTo("text/plain");
 	}
 
 }

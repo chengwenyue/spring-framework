@@ -239,6 +239,7 @@ public class InjectionMetadata {
 				field.set(target, getResourceToInject(target, requestingBeanName));
 			}
 			else {
+				// 如果已经存在了，就不在注入了
 				if (checkPropertySkipping(pvs)) {
 					return;
 				}
